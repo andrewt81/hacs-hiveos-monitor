@@ -183,10 +183,29 @@ def _gpu_hashrates(
             if 0 <= target < len(totals):
                 totals[target][label] = totals[target].get(label, 0.0) + value
 
-    for item in _hashrate_entries(worker):
+    detailed = _object_list(_nested_value(worker, "miners_stats", "hashrates"))
+    summary = _object_list(_nested_value(worker, "miners_summary", "hashrates"))
+    entries = detailed if any(
+        item.get("hashes") or item.get("dhashes") for item in detailed
+    ) else summary
+    for item in entries:
         add_values(item, "algo", "coin", "hashes", "bus_numbers")
         add_values(item, "dalgo", "dcoin", "dhashes", "dbus_numbers")
     return totals
+
+
+def _gpu_stat_value(
+    info: dict[str, Any], stats: dict[str, Any], *keys: str
+) -> float | None:
+    """Return a GPU statistic across API revisions and response shapes."""
+    nested_stats = info.get("stats")
+    sources = (stats, nested_stats if isinstance(nested_stats, dict) else {}, info)
+    for source in sources:
+        for key in keys:
+            value = _number(source.get(key))
+            if value is not None:
+                return value
+    return None
 
 
 def worker_gpus(worker: dict[str, Any]) -> list[dict[str, Any]]:
@@ -228,10 +247,54 @@ def worker_gpus(worker: dict[str, Any]) -> list[dict[str, Any]]:
             "model": info.get("model"),
             "short_name": info.get("short_name"),
         }
-        for key in (
-            "temp", "memtemp", "fan", "power", "coreclk", "memclk", "load"
-        ):
-            gpu[key] = _number(stats.get(key))
+        gpu.update(
+            {
+                "temp": _gpu_stat_value(
+                    info, stats, "temp", "temperature", "core_temp"
+                ),
+                "memtemp": _gpu_stat_value(
+                    info,
+                    stats,
+                    "memtemp",
+                    "mem_temp",
+                    "memory_temp",
+                    "mtemp",
+                    "junction_temp",
+                ),
+                "fan": _gpu_stat_value(
+                    info, stats, "fan", "fan_speed", "fanspeed"
+                ),
+                "power": _gpu_stat_value(
+                    info, stats, "power", "power_draw", "watt"
+                ),
+                "coreclk": _gpu_stat_value(
+                    info,
+                    stats,
+                    "coreclk",
+                    "core_clock",
+                    "coreClock",
+                    "clock_core",
+                ),
+                "memclk": _gpu_stat_value(
+                    info,
+                    stats,
+                    "memclk",
+                    "mem_clock",
+                    "memory_clock",
+                    "memoryClock",
+                    "clock_memory",
+                ),
+                "load": _gpu_stat_value(
+                    info,
+                    stats,
+                    "load",
+                    "gpu_load",
+                    "utilization",
+                    "usage",
+                    "core_load",
+                ),
+            }
+        )
         gpus.append(gpu)
         bus_keys.append(bus_key)
 

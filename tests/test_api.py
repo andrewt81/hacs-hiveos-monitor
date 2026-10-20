@@ -245,3 +245,63 @@ def test_worker_gpus_fall_back_to_list_order() -> None:
     assert gpus[0]["hashrates"] == {"randomx": 123}
     assert gpus[1]["temp"] == 60
     assert gpus[1]["hashrates"] == {"randomx": 456}
+
+
+def test_worker_gpus_prefer_detailed_miner_stats() -> None:
+    worker = {
+        "gpu_info": [
+            {"index": 0, "bus_number": 1},
+            {"index": 1, "bus_number": 2},
+        ],
+        "gpu_stats": [
+            {"bus_number": 1, "temp": 50},
+            {"bus_number": 2, "temp": 60},
+        ],
+        "miners_summary": {
+            "hashrates": [{"algo": "kheavyhash", "hash": 300}]
+        },
+        "miners_stats": {
+            "hashrates": [
+                {
+                    "algo": "kheavyhash",
+                    "hashes": [100, 200],
+                    "bus_numbers": [1, 2],
+                }
+            ]
+        },
+    }
+
+    gpus = worker_gpus(worker)
+
+    assert gpus[0]["hashrates"] == {"kheavyhash": 100}
+    assert gpus[1]["hashrates"] == {"kheavyhash": 200}
+
+
+def test_worker_gpus_support_nested_stats_and_field_aliases() -> None:
+    worker = {
+        "gpu_info": [
+            {
+                "index": 0,
+                "bus_id": "01:00.0",
+                "stats": {
+                    "temperature": 54,
+                    "memory_temp": 70,
+                    "fan_speed": 68,
+                    "power_draw": 115,
+                    "core_clock": 1170,
+                    "memory_clock": 2050,
+                    "utilization": 99,
+                },
+            }
+        ]
+    }
+
+    gpu = worker_gpus(worker)[0]
+
+    assert gpu["temp"] == 54
+    assert gpu["memtemp"] == 70
+    assert gpu["fan"] == 68
+    assert gpu["power"] == 115
+    assert gpu["coreclk"] == 1170
+    assert gpu["memclk"] == 2050
+    assert gpu["load"] == 99

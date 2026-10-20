@@ -38,7 +38,9 @@ model and manufacturer are also shown in the Home Assistant device page.
 The integration keeps the existing farm-wide and per-worker aggregate sensors,
 so dashboards and automations created with earlier versions continue to work.
 Some cards can show an entity as unavailable when the GPU, driver, or miner does
-not report that particular metric to HiveOS.
+not report that particular metric to HiveOS. In particular, GPU load is not part
+of every HiveOS cloud API response, and memory temperature is unavailable on
+many GPU/driver combinations.
 
 ### Device hierarchy
 
