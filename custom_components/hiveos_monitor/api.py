@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 from aiohttp import ClientError, ClientResponseError, ClientSession
@@ -215,46 +216,94 @@ def worker_uptime(worker: dict[str, Any]) -> int | None:
         ("stats", "uptime"),
         ("stats", "miner_uptime"),
     )
-    return max(0, int(value)) if value is not None else None
+    if value is not None:
+        return max(0, int(value))
+    boot_time = _first_number(worker, ("stats", "boot_time"), ("boot_time",))
+    if boot_time is not None:
+        return max(0, int(time.time() - boot_time))
+    return None
 
 
-def worker_hashrates(worker: dict[str, Any]) -> dict[str, float]:
-    """Return hashrates grouped by algorithm or coin."""
-    totals: dict[str, float] = {}
-
-    def add_items(value: Any) -> None:
-        if isinstance(value, dict):
-            if any(key in value for key in ("hashrate", "hashrate_value", "value")):
-                items = [value]
-            else:
-                for key, item in value.items():
-                    number = _number(item)
-                    if number is not None:
-                        totals[str(key)] = totals.get(str(key), 0.0) + number
-                items = _object_list(value)
-        else:
-            items = _object_list(value)
-        for item in items:
-            name = item.get("algo") or item.get("algorithm") or item.get("coin")
-            number = next(
-                (
-                    parsed
-                    for key in ("hashrate", "hashrate_value", "value")
-                    if (parsed := _number(item.get(key))) is not None
-                ),
-                None,
-            )
-            if name and number is not None:
-                label = str(name).lower()
-                totals[label] = totals.get(label, 0.0) + number
-
+def _hashrate_source(worker: dict[str, Any]) -> Any:
+    """Return the first populated HiveOS hashrate collection."""
     for path in (
         ("miners_summary", "hashrates"),
         ("miners_stats", "hashrates"),
         ("hashrates",),
     ):
-        add_items(_nested_value(worker, *path))
+        value = _nested_value(worker, *path)
+        if value:
+            return value
+    return None
+
+
+def _hashrate_entries(worker: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normalized hashrate entries for a worker."""
+    value = _hashrate_source(worker)
+    if isinstance(value, dict) and any(
+        key in value for key in ("hash", "hashrate", "hashrate_value", "value")
+    ):
+        return [value]
+    return _object_list(value)
+
+
+def worker_hashrates(worker: dict[str, Any]) -> dict[str, float]:
+    """Return hashrates grouped by algorithm or coin."""
+    totals: dict[str, float] = {}
+    source = _hashrate_source(worker)
+    if isinstance(source, dict) and not _hashrate_entries(worker):
+        for key, value in source.items():
+            number = _number(value)
+            if number is not None:
+                totals[str(key).lower()] = number
+        return totals
+
+    for item in _hashrate_entries(worker):
+        name = item.get("algo") or item.get("algorithm") or item.get("coin")
+        number = next(
+            (
+                parsed
+                for key in ("hash", "hashrate", "hashrate_value", "value")
+                if (parsed := _number(item.get(key))) is not None
+            ),
+            None,
+        )
+        if name and number is not None:
+            label = str(name).lower()
+            totals[label] = totals.get(label, 0.0) + number
+
+        dual_name = item.get("dalgo") or item.get("dcoin")
+        dual_hashrate = _number(item.get("dhash"))
+        if dual_name and dual_hashrate is not None:
+            label = str(dual_name).lower()
+            totals[label] = totals.get(label, 0.0) + dual_hashrate
     return totals
+
+
+def worker_active_miners(worker: dict[str, Any]) -> tuple[str, ...]:
+    """Return the unique miners currently reporting hashrate data."""
+    miners: list[str] = []
+    for item in _hashrate_entries(worker):
+        miner = item.get("miner")
+        if isinstance(miner, str) and miner and miner not in miners:
+            miners.append(miner)
+    return tuple(miners)
+
+
+def worker_shares(worker: dict[str, Any]) -> dict[str, int]:
+    """Return accepted, rejected, and invalid shares for a worker."""
+    totals = {"accepted": 0, "rejected": 0, "invalid": 0}
+    found = False
+    for item in _hashrate_entries(worker):
+        shares = item.get("shares")
+        if not isinstance(shares, dict):
+            continue
+        for key in totals:
+            value = _number(shares.get(key))
+            if value is not None:
+                totals[key] += int(value)
+                found = True
+    return totals if found else {}
 
 
 def worker_model(worker: dict[str, Any]) -> str:

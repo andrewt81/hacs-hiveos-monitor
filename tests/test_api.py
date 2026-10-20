@@ -2,6 +2,7 @@
 
 from custom_components.hiveos_monitor.api import (
     extract_workers,
+    worker_active_miners,
     worker_cpu_temperature,
     worker_fan_speed,
     worker_gpu_count,
@@ -13,6 +14,7 @@ from custom_components.hiveos_monitor.api import (
     worker_load_average,
     worker_name,
     worker_power,
+    worker_shares,
     worker_uptime,
 )
 
@@ -81,3 +83,55 @@ def test_worker_helpers_support_hiveos_nested_shape() -> None:
 def test_worker_hashrates_support_mapping_shape() -> None:
     worker = {"hashrates": {"ethash": 123.5, "etchash": "456"}}
     assert worker_hashrates(worker) == {"ethash": 123.5, "etchash": 456}
+
+
+def test_worker_mining_details_support_hiveos_shape() -> None:
+    worker = {
+        "miners_summary": {
+            "hashrates": [
+                {
+                    "miner": "teamredminer",
+                    "ver": "0.10.21",
+                    "algo": "kheavyhash",
+                    "hash": 12_345.5,
+                    "dalgo": "zil",
+                    "dhash": 456.0,
+                    "shares": {
+                        "accepted": 120,
+                        "rejected": 3,
+                        "invalid": 1,
+                        "ratio": 97.0,
+                    },
+                },
+                {
+                    "miner": "xmrig",
+                    "algo": "randomx",
+                    "hash": 987.5,
+                    "shares": {"accepted": 40, "rejected": 2, "invalid": 0},
+                },
+            ]
+        },
+        "miners_stats": {
+            "hashrates": [
+                {"miner": "duplicate", "algo": "ignored", "hash": 999}
+            ]
+        },
+    }
+
+    assert worker_hashrates(worker) == {
+        "kheavyhash": 12_345.5,
+        "zil": 456.0,
+        "randomx": 987.5,
+    }
+    assert worker_active_miners(worker) == ("teamredminer", "xmrig")
+    assert worker_shares(worker) == {
+        "accepted": 160,
+        "rejected": 5,
+        "invalid": 1,
+    }
+
+
+def test_worker_without_mining_data_is_safe() -> None:
+    assert worker_hashrates({}) == {}
+    assert worker_active_miners({}) == ()
+    assert worker_shares({}) == {}

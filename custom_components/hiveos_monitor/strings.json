@@ -33,7 +33,12 @@
       "gpu_memory_temperature": {"name": "Highest GPU memory temperature"},
       "fan_speed": {"name": "Average fan speed"},
       "load_average": {"name": "Load average"},
-      "uptime": {"name": "Uptime"}
+      "uptime": {"name": "Uptime"},
+      "active_miners": {"name": "Active miners"},
+      "miner_names": {"name": "Miner software"},
+      "accepted_shares": {"name": "Accepted shares"},
+      "rejected_shares": {"name": "Rejected shares"},
+      "invalid_shares": {"name": "Invalid shares"}
     }
   }
 }

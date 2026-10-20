@@ -28,7 +28,12 @@
       "gpu_memory_temperature": {"name": "Temperatura memoria GPU massima"},
       "fan_speed": {"name": "Velocità ventole media"},
       "load_average": {"name": "Carico medio"},
-      "uptime": {"name": "Tempo di attività"}
+      "uptime": {"name": "Tempo di attività"},
+      "active_miners": {"name": "Miner attivi"},
+      "miner_names": {"name": "Software miner"},
+      "accepted_shares": {"name": "Share accettate"},
+      "rejected_shares": {"name": "Share rifiutate"},
+      "invalid_shares": {"name": "Share non valide"}
     }
   }
 }

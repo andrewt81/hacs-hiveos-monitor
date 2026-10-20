@@ -28,6 +28,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .api import (
+    worker_active_miners,
     worker_cpu_temperature,
     worker_fan_speed,
     worker_gpu_count,
@@ -40,6 +41,7 @@ from .api import (
     worker_model,
     worker_name,
     worker_power,
+    worker_shares,
     worker_software_version,
     worker_uptime,
 )
@@ -168,6 +170,39 @@ WORKER_SENSORS = (
         suggested_unit_of_measurement=UnitOfTime.HOURS,
         suggested_display_precision=1,
         value_fn=worker_uptime,
+    ),
+    HiveOSWorkerSensorDescription(
+        key="active_miners",
+        translation_key="active_miners",
+        icon="mdi:pickaxe",
+        value_fn=lambda worker: len(worker_active_miners(worker)),
+    ),
+    HiveOSWorkerSensorDescription(
+        key="miner_names",
+        translation_key="miner_names",
+        icon="mdi:application-cog-outline",
+        value_fn=lambda worker: ", ".join(worker_active_miners(worker)) or None,
+    ),
+    HiveOSWorkerSensorDescription(
+        key="accepted_shares",
+        translation_key="accepted_shares",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:check-circle-outline",
+        value_fn=lambda worker: worker_shares(worker).get("accepted"),
+    ),
+    HiveOSWorkerSensorDescription(
+        key="rejected_shares",
+        translation_key="rejected_shares",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:close-circle-outline",
+        value_fn=lambda worker: worker_shares(worker).get("rejected"),
+    ),
+    HiveOSWorkerSensorDescription(
+        key="invalid_shares",
+        translation_key="invalid_shares",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:alert-circle-outline",
+        value_fn=lambda worker: worker_shares(worker).get("invalid"),
     ),
 )
 
@@ -307,7 +342,7 @@ class HiveOSWorkerSensor(HiveOSWorkerEntity, SensorEntity):
 class HiveOSWorkerHashrateSensor(HiveOSWorkerEntity, SensorEntity):
     """A dynamically discovered worker hashrate sensor."""
 
-    _attr_native_unit_of_measurement = "H/s"
+    _attr_native_unit_of_measurement = "kH/s"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
     _attr_icon = "mdi:speedometer"
