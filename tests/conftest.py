@@ -1,7 +1,7 @@
 """Load integration modules without requiring a Home Assistant installation."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from types import ModuleType
 
 ROOT = Path(__file__).parents[1]
