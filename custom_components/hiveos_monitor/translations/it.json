@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Collega una farm HiveOS",
+        "description": "Se possibile, usa un token API di sola lettura.",
+        "data": {"api_token": "Token API", "farm_id": "ID farm"}
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi a HiveOS",
+      "invalid_auth": "Token non valido o permessi insufficienti"
+    },
+    "abort": {"already_configured": "Questa farm è già configurata"}
+  },
+  "entity": {
+    "sensor": {
+      "workers": {"name": "Worker"},
+      "online_workers": {"name": "Worker online"},
+      "offline_workers": {"name": "Worker offline"},
+      "gpus": {"name": "GPU"},
+      "power": {"name": "Potenza"}
+    }
+  }
+}
