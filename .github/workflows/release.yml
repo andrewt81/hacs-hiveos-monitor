@@ -14,7 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build HACS archive
-        run: zip -r hacs-hiveos-monitor.zip custom_components hacs.json README.md LICENSE
+        run: |
+          cd custom_components/hiveos_monitor
+          zip -r "$GITHUB_WORKSPACE/hacs-hiveos-monitor.zip" .
+          cd "$GITHUB_WORKSPACE"
+          unzip -l hacs-hiveos-monitor.zip
+          unzip -p hacs-hiveos-monitor.zip manifest.json >/dev/null
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
