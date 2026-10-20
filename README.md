@@ -27,6 +27,10 @@ Copy `custom_components/hiveos_monitor` into the `custom_components` directory o
 
 HiveOS API access may depend on the account or farm plan. This integration only performs `GET` requests.
 
+## Support the project
+
+If this integration is useful to you, you can [support its development with an optional cryptocurrency donation](DONATE.md). Donations do not unlock features or affect support.
+
 ## License
 
 MIT
