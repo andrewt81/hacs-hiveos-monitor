@@ -159,12 +159,23 @@ def worker_power(worker: dict[str, Any]) -> float | None:
 
 def worker_cpu_temperature(worker: dict[str, Any]) -> float | None:
     """Return CPU temperature in degrees Celsius."""
-    return _first_number(
+    value = _first_number(
         worker,
         ("cpu_temp",),
         ("stats", "cpu_temp"),
         ("hardware_stats", "cpu_temp"),
     )
+    if value is not None:
+        return value
+    temperatures = _nested_value(worker, "hardware_stats", "cputemp")
+    if isinstance(temperatures, (list, tuple)):
+        values = [
+            value
+            for item in temperatures
+            if (value := _number(item)) is not None
+        ]
+        return max(values) if values else None
+    return _number(temperatures)
 
 
 def _gpu_values(worker: dict[str, Any], *keys: str) -> list[float]:
@@ -186,7 +197,9 @@ def worker_gpu_temperature(worker: dict[str, Any]) -> float | None:
 
 def worker_gpu_memory_temperature(worker: dict[str, Any]) -> float | None:
     """Return the highest GPU memory temperature."""
-    values = _gpu_values(worker, "mem_temp", "memory_temp", "mtemp")
+    values = _gpu_values(
+        worker, "memtemp", "mem_temp", "memory_temp", "mtemp"
+    )
     return max(values) if values else None
 
 
@@ -198,7 +211,12 @@ def worker_fan_speed(worker: dict[str, Any]) -> float | None:
 
 def worker_load_average(worker: dict[str, Any]) -> float | None:
     """Return the one-minute system load average."""
-    for path in (("stats", "loadavg"), ("stats", "load_average"), ("loadavg",)):
+    for path in (
+        ("hardware_stats", "cpuavg"),
+        ("stats", "loadavg"),
+        ("stats", "load_average"),
+        ("loadavg",),
+    ):
         value = _nested_value(worker, *path)
         if isinstance(value, (list, tuple)) and value:
             value = value[0]
@@ -311,6 +329,10 @@ def worker_model(worker: dict[str, Any]) -> str:
     platform = worker.get("platform")
     if isinstance(platform, dict):
         platform = platform.get("name") or platform.get("code")
+    if platform in (1, "1"):
+        return "GPU rig"
+    if platform in (2, "2"):
+        return "ASIC"
     return str(platform or worker.get("system_type") or "Mining worker")
 
 

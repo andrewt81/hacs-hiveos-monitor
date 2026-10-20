@@ -12,6 +12,7 @@ from custom_components.hiveos_monitor.api import (
     worker_id,
     worker_is_online,
     worker_load_average,
+    worker_model,
     worker_name,
     worker_power,
     worker_shares,
@@ -135,3 +136,27 @@ def test_worker_without_mining_data_is_safe() -> None:
     assert worker_hashrates({}) == {}
     assert worker_active_miners({}) == ()
     assert worker_shares({}) == {}
+
+
+def test_hardware_stats_fields_used_by_hiveos() -> None:
+    worker = {
+        "platform": 1,
+        "hardware_stats": {
+            "cpuavg": [1.25, 0.9, 0.75],
+            "cputemp": [48, 55, 51],
+        },
+        "gpu_stats": [
+            {"memtemp": 82},
+            {"memtemp": 76},
+            {"memtemp": 90},
+        ],
+    }
+
+    assert worker_load_average(worker) == 1.25
+    assert worker_cpu_temperature(worker) == 55
+    assert worker_gpu_memory_temperature(worker) == 90
+    assert worker_model(worker) == "GPU rig"
+
+
+def test_asic_platform_has_readable_model() -> None:
+    assert worker_model({"platform": 2}) == "ASIC"
