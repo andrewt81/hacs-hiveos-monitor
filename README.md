@@ -15,6 +15,9 @@ Custom Home Assistant integration for read-only monitoring of a HiveOS farm.
 - Cloud polling every 60 seconds
 - UI configuration with a HiveOS API token and farm ID
 
+Hashrate values use the same readable scale as HiveOS: kH/s, MH/s, GH/s, or
+TH/s are selected automatically from the value reported by the API.
+
 ### Individual GPU monitoring
 
 Starting with version 0.4.0, every GPU is represented as a separate Home

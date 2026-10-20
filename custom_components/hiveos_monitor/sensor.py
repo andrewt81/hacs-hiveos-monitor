@@ -29,6 +29,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .api import (
+    hashrate_scale,
     worker_active_miners,
     worker_cpu_temperature,
     worker_fan_speed,
@@ -464,7 +465,6 @@ class HiveOSWorkerSensor(HiveOSWorkerEntity, SensorEntity):
 class HiveOSWorkerHashrateSensor(HiveOSWorkerEntity, SensorEntity):
     """A dynamically discovered worker hashrate sensor."""
 
-    _attr_native_unit_of_measurement = "kH/s"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
     _attr_icon = "mdi:speedometer"
@@ -483,12 +483,20 @@ class HiveOSWorkerHashrateSensor(HiveOSWorkerEntity, SensorEntity):
             f"{self._farm_id}_{identifier}_hashrate_{algorithm_key}"
         )
         self._attr_name = f"Hashrate {algorithm}"
+        worker = self._worker
+        current_value = (
+            worker_hashrates(worker).get(algorithm) if worker else None
+        )
+        self._hashrate_divisor, self._attr_native_unit_of_measurement = (
+            hashrate_scale(current_value)
+        )
 
     @property
     def native_value(self) -> float | None:
         """Return the current hashrate for this algorithm."""
         worker = self._worker
-        return worker_hashrates(worker).get(self._algorithm) if worker else None
+        value = worker_hashrates(worker).get(self._algorithm) if worker else None
+        return value / self._hashrate_divisor if value is not None else None
 
 
 class HiveOSGpuEntity(HiveOSWorkerEntity):
@@ -573,7 +581,6 @@ class HiveOSGpuSensor(HiveOSGpuEntity, SensorEntity):
 class HiveOSGpuHashrateSensor(HiveOSGpuEntity, SensorEntity):
     """A dynamically discovered per-GPU hashrate sensor."""
 
-    _attr_native_unit_of_measurement = "kH/s"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
     _attr_icon = "mdi:speedometer"
@@ -594,6 +601,13 @@ class HiveOSGpuHashrateSensor(HiveOSGpuEntity, SensorEntity):
             f"hashrate_{algorithm_key}"
         )
         self._attr_name = f"Hashrate {algorithm}"
+        gpu = self._gpu
+        current_value = (
+            gpu.get("hashrates", {}).get(algorithm) if gpu else None
+        )
+        self._hashrate_divisor, self._attr_native_unit_of_measurement = (
+            hashrate_scale(current_value)
+        )
 
     @property
     def native_value(self) -> float | None:
@@ -601,4 +615,5 @@ class HiveOSGpuHashrateSensor(HiveOSGpuEntity, SensorEntity):
         gpu = self._gpu
         if gpu is None:
             return None
-        return gpu.get("hashrates", {}).get(self._algorithm)
+        value = gpu.get("hashrates", {}).get(self._algorithm)
+        return value / self._hashrate_divisor if value is not None else None

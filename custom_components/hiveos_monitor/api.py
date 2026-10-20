@@ -456,6 +456,18 @@ def worker_hashrates(worker: dict[str, Any]) -> dict[str, float]:
     return totals
 
 
+def hashrate_scale(value: float | None) -> tuple[float, str]:
+    """Return a divisor and display unit for a HiveOS kH/s value."""
+    magnitude = abs(value or 0)
+    if magnitude >= 1_000_000_000:
+        return 1_000_000_000, "TH/s"
+    if magnitude >= 1_000_000:
+        return 1_000_000, "GH/s"
+    if magnitude >= 1_000:
+        return 1_000, "MH/s"
+    return 1, "kH/s"
+
+
 def worker_active_miners(worker: dict[str, Any]) -> tuple[str, ...]:
     """Return the unique miners currently reporting hashrate data."""
     miners: list[str] = []

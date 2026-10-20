@@ -7,6 +7,7 @@ import pytest
 from custom_components.hiveos_monitor.api import (
     HiveOSClient,
     extract_workers,
+    hashrate_scale,
     worker_active_miners,
     worker_cpu_temperature,
     worker_fan_speed,
@@ -90,6 +91,13 @@ def test_worker_helpers_support_hiveos_nested_shape() -> None:
 def test_worker_hashrates_support_mapping_shape() -> None:
     worker = {"hashrates": {"ethash": 123.5, "etchash": "456"}}
     assert worker_hashrates(worker) == {"ethash": 123.5, "etchash": 456}
+
+
+def test_hashrate_scale_uses_readable_hiveos_units() -> None:
+    assert hashrate_scale(999.9) == (1, "kH/s")
+    assert hashrate_scale(1_000) == (1_000, "MH/s")
+    assert hashrate_scale(1_000_000) == (1_000_000, "GH/s")
+    assert hashrate_scale(104_699_438_921) == (1_000_000_000, "TH/s")
 
 
 def test_worker_mining_details_support_hiveos_shape() -> None:
