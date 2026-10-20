@@ -19,7 +19,16 @@
       "online_workers": {"name": "Worker online"},
       "offline_workers": {"name": "Worker offline"},
       "gpus": {"name": "GPU"},
-      "power": {"name": "Potenza"}
+      "power": {"name": "Potenza"},
+      "worker_status": {"name": "Stato"},
+      "worker_power": {"name": "Potenza"},
+      "worker_gpus": {"name": "GPU"},
+      "cpu_temperature": {"name": "Temperatura CPU"},
+      "gpu_temperature": {"name": "Temperatura GPU massima"},
+      "gpu_memory_temperature": {"name": "Temperatura memoria GPU massima"},
+      "fan_speed": {"name": "Velocità ventole media"},
+      "load_average": {"name": "Carico medio"},
+      "uptime": {"name": "Tempo di attività"}
     }
   }
 }

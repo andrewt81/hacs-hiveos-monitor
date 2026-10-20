@@ -7,6 +7,10 @@ Custom Home Assistant integration for read-only monitoring of a HiveOS farm.
 - Total, online, and offline worker counts
 - GPU count
 - Farm power consumption
+- One Home Assistant device for every HiveOS worker
+- Per-worker status, power, GPU count, CPU/GPU temperatures, fan speed,
+  load average, and uptime
+- Per-worker hashrate sensors, discovered dynamically for each algorithm
 - Cloud polling every 60 seconds
 - UI configuration with a HiveOS API token and farm ID
 
