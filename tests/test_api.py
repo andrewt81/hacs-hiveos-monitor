@@ -1,6 +1,11 @@
 """Tests for the HiveOS API helpers."""
 
+import sys
+
+import pytest
+
 from custom_components.hiveos_monitor.api import (
+    HiveOSClient,
     extract_workers,
     worker_active_miners,
     worker_cpu_temperature,
@@ -230,7 +235,7 @@ def test_worker_gpus_match_stats_and_hashrates_by_bus() -> None:
     assert gpus[1]["hashrates"] == {"kheavyhash": 202.5, "zil": 22.0}
 
 
-def test_worker_gpus_fall_back_to_list_order() -> None:
+def test_worker_gpus_do_not_assign_hashrate_without_pci_mapping() -> None:
     worker = {
         "gpu_info": [{"index": 0}, {"index": 1}],
         "gpu_stats": [{"temp": 50}, {"temp": 60}],
@@ -242,9 +247,9 @@ def test_worker_gpus_fall_back_to_list_order() -> None:
     gpus = worker_gpus(worker)
 
     assert gpus[0]["temp"] == 50
-    assert gpus[0]["hashrates"] == {"randomx": 123}
+    assert gpus[0]["hashrates"] == {}
     assert gpus[1]["temp"] == 60
-    assert gpus[1]["hashrates"] == {"randomx": 456}
+    assert gpus[1]["hashrates"] == {}
 
 
 def test_worker_gpus_prefer_detailed_miner_stats() -> None:
@@ -290,7 +295,6 @@ def test_worker_gpus_support_nested_stats_and_field_aliases() -> None:
                     "power_draw": 115,
                     "core_clock": 1170,
                     "memory_clock": 2050,
-                    "utilization": 99,
                 },
             }
         ]
@@ -304,4 +308,37 @@ def test_worker_gpus_support_nested_stats_and_field_aliases() -> None:
     assert gpu["power"] == 115
     assert gpu["coreclk"] == 1170
     assert gpu["memclk"] == 2050
-    assert gpu["load"] == 99
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="The sandbox blocks the socket pair used by the Windows event loop",
+)
+async def test_client_enriches_online_workers_with_live_details() -> None:
+    client = HiveOSClient(None, "token", "123")  # type: ignore[arg-type]
+    requested: list[str] = []
+
+    async def fake_get_json(path: str):
+        requested.append(path)
+        if path.endswith("/workers"):
+            return {
+                "data": [
+                    {"id": 10, "stats": {"online": True}},
+                    {"id": 20, "stats": {"online": False}},
+                ]
+            }
+        return {
+            "id": 10,
+            "gpu_stats": [
+                {"bus_number": 1, "coreclk": 1200, "memclk": 2100}
+            ],
+        }
+
+    client._get_json = fake_get_json  # type: ignore[method-assign]
+
+    workers = await client.async_get_workers()
+
+    assert workers[0]["gpu_stats"][0]["coreclk"] == 1200
+    assert workers[0]["gpu_stats"][0]["memclk"] == 2100
+    assert "/farms/123/workers/10" in requested
+    assert "/farms/123/workers/20" not in requested

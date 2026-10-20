@@ -39,8 +39,7 @@
       "gpu_fan_speed": {"name": "Velocità ventola"},
       "gpu_power": {"name": "Potenza"},
       "gpu_core_clock": {"name": "Clock core"},
-      "gpu_memory_clock": {"name": "Clock memoria"},
-      "gpu_load": {"name": "Carico"}
+      "gpu_memory_clock": {"name": "Clock memoria"}
     }
   }
 }

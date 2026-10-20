@@ -21,6 +21,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -270,15 +271,6 @@ GPU_SENSORS = (
         icon="mdi:memory",
         value_fn=lambda gpu: gpu.get("memclk"),
     ),
-    HiveOSGpuSensorDescription(
-        key="load",
-        translation_key="gpu_load",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
-        suggested_display_precision=0,
-        icon="mdi:gauge",
-        value_fn=lambda gpu: gpu.get("load"),
-    ),
 )
 
 
@@ -295,8 +287,11 @@ async def async_setup_entry(
     )
 
     added: set[tuple[str, str]] = set()
+    entity_registry = er.async_get(hass)
+    initial_discovery = True
 
     def async_add_worker_entities() -> None:
+        nonlocal initial_discovery
         entities: list[SensorEntity] = []
         for worker in coordinator.data:
             identifier = worker_id(worker)
@@ -322,7 +317,27 @@ async def async_setup_entry(
                     )
             for gpu in worker_gpus(worker):
                 gpu_identifier = str(gpu["id"])
+                legacy_load_unique_id = (
+                    f"{entry.data[CONF_FARM_ID]}_{identifier}_gpu_"
+                    f"{gpu_identifier}_load"
+                )
+                legacy_load_entity_id = entity_registry.async_get_entity_id(
+                    "sensor", DOMAIN, legacy_load_unique_id
+                )
+                if initial_discovery and legacy_load_entity_id:
+                    entity_registry.async_remove(legacy_load_entity_id)
                 for description in GPU_SENSORS:
+                    unique_id = (
+                        f"{entry.data[CONF_FARM_ID]}_{identifier}_gpu_"
+                        f"{gpu_identifier}_{description.key}"
+                    )
+                    if description.value_fn(gpu) is None:
+                        stale_entity_id = entity_registry.async_get_entity_id(
+                            "sensor", DOMAIN, unique_id
+                        )
+                        if initial_discovery and stale_entity_id:
+                            entity_registry.async_remove(stale_entity_id)
+                        continue
                     key = (identifier, f"gpu_{gpu_identifier}_{description.key}")
                     if key not in added:
                         added.add(key)
@@ -353,6 +368,7 @@ async def async_setup_entry(
                         )
         if entities:
             async_add_entities(entities)
+        initial_discovery = False
 
     async_add_worker_entities()
     entry.async_on_unload(coordinator.async_add_listener(async_add_worker_entities))

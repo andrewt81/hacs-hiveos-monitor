@@ -44,8 +44,7 @@
       "gpu_fan_speed": {"name": "Fan speed"},
       "gpu_power": {"name": "Power"},
       "gpu_core_clock": {"name": "Core clock"},
-      "gpu_memory_clock": {"name": "Memory clock"},
-      "gpu_load": {"name": "Load"}
+      "gpu_memory_clock": {"name": "Memory clock"}
     }
   }
 }

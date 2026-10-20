@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
 from typing import Any
@@ -160,26 +161,28 @@ def _gpu_hashrates(
             return
         label = str(name).lower()
         buses = item.get(buses_key)
+        if not isinstance(buses, (list, tuple)):
+            return
         bus_indexes = {
             key: index
             for index, value in enumerate(buses)
             if (key := _bus_key(value)) is not None
-        } if isinstance(buses, (list, tuple)) else {}
+        }
+        if not bus_indexes:
+            return
         for position, raw_value in enumerate(values):
             value = _number(raw_value)
             if value is None:
                 continue
-            target = position
-            if bus_indexes:
-                target = next(
-                    (
-                        index
-                        for index, bus_key in enumerate(gpu_bus_keys)
-                        if bus_key is not None
-                        and bus_indexes.get(bus_key) == position
-                    ),
-                    -1,
-                )
+            target = next(
+                (
+                    index
+                    for index, bus_key in enumerate(gpu_bus_keys)
+                    if bus_key is not None
+                    and bus_indexes.get(bus_key) == position
+                ),
+                -1,
+            )
             if 0 <= target < len(totals):
                 totals[target][label] = totals[target].get(label, 0.0) + value
 
@@ -283,15 +286,6 @@ def worker_gpus(worker: dict[str, Any]) -> list[dict[str, Any]]:
                     "memory_clock",
                     "memoryClock",
                     "clock_memory",
-                ),
-                "load": _gpu_stat_value(
-                    info,
-                    stats,
-                    "load",
-                    "gpu_load",
-                    "utilization",
-                    "usage",
-                    "core_load",
                 ),
             }
         )
@@ -541,6 +535,24 @@ class HiveOSClient:
         await self._get_json(f"/farms/{self._farm_id}")
 
     async def async_get_workers(self) -> list[dict[str, Any]]:
-        """Fetch current workers for the configured farm."""
+        """Fetch workers and enrich online rigs with their live details."""
         payload = await self._get_json(f"/farms/{self._farm_id}/workers")
-        return extract_workers(payload)
+        workers = extract_workers(payload)
+        semaphore = asyncio.Semaphore(4)
+
+        async def enrich(worker: dict[str, Any]) -> dict[str, Any]:
+            identifier = worker_id(worker)
+            if identifier is None or not worker_is_online(worker):
+                return worker
+            async with semaphore:
+                try:
+                    detail = await self._get_json(
+                        f"/farms/{self._farm_id}/workers/{identifier}"
+                    )
+                except HiveOSAPIError:
+                    return worker
+            if isinstance(detail, dict) and isinstance(detail.get("data"), dict):
+                detail = detail["data"]
+            return {**worker, **detail} if isinstance(detail, dict) else worker
+
+        return list(await asyncio.gather(*(enrich(worker) for worker in workers)))

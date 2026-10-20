@@ -26,7 +26,6 @@ Assistant device below its HiveOS worker. Each GPU can expose:
 - Power consumption
 - Core clock
 - Memory clock
-- GPU load
 - A separate hashrate sensor for every algorithm reported by HiveOS,
   including dual-mining algorithms
 
@@ -37,10 +36,9 @@ model and manufacturer are also shown in the Home Assistant device page.
 
 The integration keeps the existing farm-wide and per-worker aggregate sensors,
 so dashboards and automations created with earlier versions continue to work.
-Some cards can show an entity as unavailable when the GPU, driver, or miner does
-not report that particular metric to HiveOS. In particular, GPU load is not part
-of every HiveOS cloud API response, and memory temperature is unavailable on
-many GPU/driver combinations.
+Optional sensors are created only when HiveOS reports a value. Memory
+temperature and clock data can therefore be absent on some GPU/driver
+combinations without leaving empty entities in Home Assistant.
 
 ### Device hierarchy
 
