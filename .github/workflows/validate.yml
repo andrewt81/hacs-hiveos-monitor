@@ -22,8 +22,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # Repository topics are configured in GitHub metadata, not in source.
-          ignore: topics
   hassfest:
     runs-on: ubuntu-latest
     steps:
