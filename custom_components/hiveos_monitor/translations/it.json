@@ -33,7 +33,14 @@
       "miner_names": {"name": "Software miner"},
       "accepted_shares": {"name": "Share accettate"},
       "rejected_shares": {"name": "Share rifiutate"},
-      "invalid_shares": {"name": "Share non valide"}
+      "invalid_shares": {"name": "Share non valide"},
+      "gpu_core_temperature": {"name": "Temperatura core"},
+      "gpu_individual_memory_temperature": {"name": "Temperatura memoria"},
+      "gpu_fan_speed": {"name": "Velocità ventola"},
+      "gpu_power": {"name": "Potenza"},
+      "gpu_core_clock": {"name": "Clock core"},
+      "gpu_memory_clock": {"name": "Clock memoria"},
+      "gpu_load": {"name": "Carico"}
     }
   }
 }

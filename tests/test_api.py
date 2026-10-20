@@ -8,6 +8,7 @@ from custom_components.hiveos_monitor.api import (
     worker_gpu_count,
     worker_gpu_memory_temperature,
     worker_gpu_temperature,
+    worker_gpus,
     worker_hashrates,
     worker_id,
     worker_is_online,
@@ -160,3 +161,87 @@ def test_hardware_stats_fields_used_by_hiveos() -> None:
 
 def test_asic_platform_has_readable_model() -> None:
     assert worker_model({"platform": 2}) == "ASIC"
+
+
+def test_worker_gpus_match_stats_and_hashrates_by_bus() -> None:
+    worker = {
+        "gpu_info": [
+            {
+                "index": 0,
+                "bus_id": "01:00.0",
+                "bus_number": 1,
+                "brand": "nvidia",
+                "model": "GeForce RTX 3070",
+                "short_name": "RTX 3070",
+            },
+            {
+                "index": 1,
+                "bus_id": "02:00.0",
+                "bus_number": 2,
+                "brand": "amd",
+                "model": "Radeon RX 6600",
+                "short_name": "RX 6600",
+            },
+        ],
+        "gpu_stats": [
+            {
+                "bus_number": 2,
+                "temp": 58,
+                "memtemp": 72,
+                "fan": 65,
+                "power": 71,
+                "coreclk": 950,
+                "memclk": 950,
+                "load": 99,
+            },
+            {
+                "bus_number": 1,
+                "temp": 55,
+                "memtemp": 68,
+                "fan": 60,
+                "power": 120,
+                "coreclk": 1100,
+                "memclk": 2100,
+                "load": 98,
+            },
+        ],
+        "miners_summary": {
+            "hashrates": [
+                {
+                    "algo": "kheavyhash",
+                    "hashes": [101.5, 202.5],
+                    "bus_numbers": [1, 2],
+                    "dalgo": "zil",
+                    "dhashes": [11.0, 22.0],
+                    "dbus_numbers": [1, 2],
+                }
+            ]
+        },
+    }
+
+    gpus = worker_gpus(worker)
+
+    assert [gpu["id"] for gpu in gpus] == ["01:00.0", "02:00.0"]
+    assert gpus[0]["temp"] == 55
+    assert gpus[0]["memtemp"] == 68
+    assert gpus[0]["hashrates"] == {"kheavyhash": 101.5, "zil": 11.0}
+    assert gpus[1]["temp"] == 58
+    assert gpus[1]["power"] == 71
+    assert gpus[1]["hashrates"] == {"kheavyhash": 202.5, "zil": 22.0}
+
+
+def test_worker_gpus_fall_back_to_list_order() -> None:
+    worker = {
+        "gpu_info": [{"index": 0}, {"index": 1}],
+        "gpu_stats": [{"temp": 50}, {"temp": 60}],
+        "miners_summary": {
+            "hashrates": [{"algo": "randomx", "hashes": [123, 456]}]
+        },
+    }
+
+    gpus = worker_gpus(worker)
+
+    assert gpus[0]["temp"] == 50
+    assert gpus[0]["hashrates"] == {"randomx": 123}
+    assert gpus[1]["temp"] == 60
+    assert gpus[1]["hashrates"] == {"randomx": 456}

@@ -34,6 +34,7 @@ from .api import (
     worker_gpu_count,
     worker_gpu_memory_temperature,
     worker_gpu_temperature,
+    worker_gpus,
     worker_hashrates,
     worker_id,
     worker_is_online,
@@ -48,6 +49,7 @@ from .api import (
 from .const import CONF_FARM_ID, DOMAIN
 
 Worker = dict[str, Any]
+Gpu = dict[str, Any]
 Coordinator = DataUpdateCoordinator[list[Worker]]
 
 
@@ -63,6 +65,13 @@ class HiveOSWorkerSensorDescription(SensorEntityDescription):
     """Describe a sensor belonging to one HiveOS worker."""
 
     value_fn: Callable[[Worker], int | float | str | None]
+
+
+@dataclass(frozen=True, kw_only=True)
+class HiveOSGpuSensorDescription(SensorEntityDescription):
+    """Describe a sensor belonging to one HiveOS GPU."""
+
+    value_fn: Callable[[Gpu], int | float | None]
 
 
 FARM_SENSORS = (
@@ -206,6 +215,72 @@ WORKER_SENSORS = (
     ),
 )
 
+GPU_SENSORS = (
+    HiveOSGpuSensorDescription(
+        key="core_temperature",
+        translation_key="gpu_core_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=0,
+        value_fn=lambda gpu: gpu.get("temp"),
+    ),
+    HiveOSGpuSensorDescription(
+        key="memory_temperature",
+        translation_key="gpu_individual_memory_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=0,
+        value_fn=lambda gpu: gpu.get("memtemp"),
+    ),
+    HiveOSGpuSensorDescription(
+        key="fan_speed",
+        translation_key="gpu_fan_speed",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        icon="mdi:fan",
+        value_fn=lambda gpu: gpu.get("fan"),
+    ),
+    HiveOSGpuSensorDescription(
+        key="power",
+        translation_key="gpu_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+        value_fn=lambda gpu: gpu.get("power"),
+    ),
+    HiveOSGpuSensorDescription(
+        key="core_clock",
+        translation_key="gpu_core_clock",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="MHz",
+        suggested_display_precision=0,
+        icon="mdi:memory",
+        value_fn=lambda gpu: gpu.get("coreclk"),
+    ),
+    HiveOSGpuSensorDescription(
+        key="memory_clock",
+        translation_key="gpu_memory_clock",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="MHz",
+        suggested_display_precision=0,
+        icon="mdi:memory",
+        value_fn=lambda gpu: gpu.get("memclk"),
+    ),
+    HiveOSGpuSensorDescription(
+        key="load",
+        translation_key="gpu_load",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        icon="mdi:gauge",
+        value_fn=lambda gpu: gpu.get("load"),
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -245,6 +320,37 @@ async def async_setup_entry(
                             coordinator, entry, identifier, algorithm
                         )
                     )
+            for gpu in worker_gpus(worker):
+                gpu_identifier = str(gpu["id"])
+                for description in GPU_SENSORS:
+                    key = (identifier, f"gpu_{gpu_identifier}_{description.key}")
+                    if key not in added:
+                        added.add(key)
+                        entities.append(
+                            HiveOSGpuSensor(
+                                coordinator,
+                                entry,
+                                identifier,
+                                gpu_identifier,
+                                description,
+                            )
+                        )
+                for algorithm in gpu.get("hashrates", {}):
+                    key = (
+                        identifier,
+                        f"gpu_{gpu_identifier}_hashrate_{algorithm}",
+                    )
+                    if key not in added:
+                        added.add(key)
+                        entities.append(
+                            HiveOSGpuHashrateSensor(
+                                coordinator,
+                                entry,
+                                identifier,
+                                gpu_identifier,
+                                algorithm,
+                            )
+                        )
         if entities:
             async_add_entities(entities)
 
@@ -367,3 +473,116 @@ class HiveOSWorkerHashrateSensor(HiveOSWorkerEntity, SensorEntity):
         """Return the current hashrate for this algorithm."""
         worker = self._worker
         return worker_hashrates(worker).get(self._algorithm) if worker else None
+
+
+class HiveOSGpuEntity(HiveOSWorkerEntity):
+    """Base class for entities belonging to one GPU."""
+
+    def __init__(
+        self,
+        coordinator: Coordinator,
+        entry: ConfigEntry,
+        identifier: str,
+        gpu_identifier: str,
+    ) -> None:
+        super().__init__(coordinator, entry, identifier)
+        self._gpu_identifier = gpu_identifier
+        gpu = self._gpu
+        gpu_index = gpu.get("index") if gpu else gpu_identifier
+        brand = str(gpu.get("brand") or "HiveOS") if gpu else "HiveOS"
+        model = (
+            str(gpu.get("short_name") or gpu.get("model") or "GPU")
+            if gpu
+            else "GPU"
+        )
+        worker = self._worker
+        self._attr_device_info = {
+            "identifiers": {
+                (DOMAIN, f"{self._farm_id}_{identifier}_gpu_{gpu_identifier}")
+            },
+            "name": (
+                f"{worker_name(worker)} GPU {gpu_index}"
+                if worker
+                else f"GPU {gpu_index}"
+            ),
+            "manufacturer": brand.upper(),
+            "model": model,
+            "via_device": (DOMAIN, f"{self._farm_id}_{identifier}"),
+        }
+
+    @property
+    def _gpu(self) -> Gpu | None:
+        worker = self._worker
+        if worker is None:
+            return None
+        return next(
+            (
+                gpu
+                for gpu in worker_gpus(worker)
+                if str(gpu["id"]) == self._gpu_identifier
+            ),
+            None,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return whether this GPU is still reported by HiveOS."""
+        return super().available and self._gpu is not None
+
+
+class HiveOSGpuSensor(HiveOSGpuEntity, SensorEntity):
+    """A sensor exposing one metric for a single GPU."""
+
+    def __init__(
+        self,
+        coordinator: Coordinator,
+        entry: ConfigEntry,
+        identifier: str,
+        gpu_identifier: str,
+        description: HiveOSGpuSensorDescription,
+    ) -> None:
+        super().__init__(coordinator, entry, identifier, gpu_identifier)
+        self.entity_description = description
+        self._attr_unique_id = (
+            f"{self._farm_id}_{identifier}_gpu_{gpu_identifier}_{description.key}"
+        )
+
+    @property
+    def native_value(self) -> int | float | None:
+        """Return the current GPU sensor value."""
+        gpu = self._gpu
+        return self.entity_description.value_fn(gpu) if gpu else None
+
+
+class HiveOSGpuHashrateSensor(HiveOSGpuEntity, SensorEntity):
+    """A dynamically discovered per-GPU hashrate sensor."""
+
+    _attr_native_unit_of_measurement = "kH/s"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:speedometer"
+
+    def __init__(
+        self,
+        coordinator: Coordinator,
+        entry: ConfigEntry,
+        identifier: str,
+        gpu_identifier: str,
+        algorithm: str,
+    ) -> None:
+        super().__init__(coordinator, entry, identifier, gpu_identifier)
+        self._algorithm = algorithm
+        algorithm_key = re.sub(r"[^a-z0-9]+", "_", algorithm.lower()).strip("_")
+        self._attr_unique_id = (
+            f"{self._farm_id}_{identifier}_gpu_{gpu_identifier}_"
+            f"hashrate_{algorithm_key}"
+        )
+        self._attr_name = f"Hashrate {algorithm}"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return this GPU's current hashrate for the algorithm."""
+        gpu = self._gpu
+        if gpu is None:
+            return None
+        return gpu.get("hashrates", {}).get(self._algorithm)

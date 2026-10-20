@@ -139,6 +139,107 @@ def worker_gpu_count(worker: dict[str, Any]) -> int:
     return 0
 
 
+def _bus_key(value: Any) -> str | None:
+    """Return a comparable PCI bus key."""
+    if isinstance(value, (str, int)) and str(value).strip():
+        return str(value).strip().lower()
+    return None
+
+
+def _gpu_hashrates(
+    worker: dict[str, Any], gpu_bus_keys: list[str | None]
+) -> list[dict[str, float]]:
+    """Return per-GPU hashrates, matching HiveOS bus arrays when available."""
+    totals: list[dict[str, float]] = [{} for _ in gpu_bus_keys]
+
+    def add_values(item: dict[str, Any], name_key: str, coin_key: str,
+                   values_key: str, buses_key: str) -> None:
+        name = item.get(name_key) or item.get(coin_key)
+        values = item.get(values_key)
+        if not name or not isinstance(values, (list, tuple)):
+            return
+        label = str(name).lower()
+        buses = item.get(buses_key)
+        bus_indexes = {
+            key: index
+            for index, value in enumerate(buses)
+            if (key := _bus_key(value)) is not None
+        } if isinstance(buses, (list, tuple)) else {}
+        for position, raw_value in enumerate(values):
+            value = _number(raw_value)
+            if value is None:
+                continue
+            target = position
+            if bus_indexes:
+                target = next(
+                    (
+                        index
+                        for index, bus_key in enumerate(gpu_bus_keys)
+                        if bus_key is not None
+                        and bus_indexes.get(bus_key) == position
+                    ),
+                    -1,
+                )
+            if 0 <= target < len(totals):
+                totals[target][label] = totals[target].get(label, 0.0) + value
+
+    for item in _hashrate_entries(worker):
+        add_values(item, "algo", "coin", "hashes", "bus_numbers")
+        add_values(item, "dalgo", "dcoin", "dhashes", "dbus_numbers")
+    return totals
+
+
+def worker_gpus(worker: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normalized per-GPU information and statistics for a worker."""
+    info_items = _object_list(worker.get("gpu_info"))
+    stats_items = _object_list(worker.get("gpu_stats"))
+    stats_by_bus = {
+        key: item
+        for item in stats_items
+        if (key := _bus_key(item.get("bus_number"))) is not None
+    }
+    count = max(len(info_items), len(stats_items))
+    gpus: list[dict[str, Any]] = []
+    bus_keys: list[str | None] = []
+
+    for position in range(count):
+        info = info_items[position] if position < len(info_items) else {}
+        bus_key = _bus_key(info.get("bus_number"))
+        stats = stats_by_bus.get(bus_key) if bus_key is not None else None
+        if stats is None and position < len(stats_items):
+            stats = stats_items[position]
+        stats = stats or {}
+        if bus_key is None:
+            bus_key = _bus_key(stats.get("bus_number"))
+
+        display_index = info.get("index", position)
+        stable_id = (
+            _bus_key(info.get("bus_id"))
+            or bus_key
+            or _bus_key(display_index)
+            or str(position)
+        )
+        gpu = {
+            "id": stable_id,
+            "index": display_index,
+            "bus_id": info.get("bus_id"),
+            "bus_number": info.get("bus_number", stats.get("bus_number")),
+            "brand": info.get("brand"),
+            "model": info.get("model"),
+            "short_name": info.get("short_name"),
+        }
+        for key in (
+            "temp", "memtemp", "fan", "power", "coreclk", "memclk", "load"
+        ):
+            gpu[key] = _number(stats.get(key))
+        gpus.append(gpu)
+        bus_keys.append(bus_key)
+
+    for gpu, hashrates in zip(gpus, _gpu_hashrates(worker, bus_keys), strict=True):
+        gpu["hashrates"] = hashrates
+    return gpus
+
+
 def worker_power(worker: dict[str, Any]) -> float | None:
     """Return worker power in watts, if present."""
     return _first_number(
